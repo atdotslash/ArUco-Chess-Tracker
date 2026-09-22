@@ -30,3 +30,6 @@ calibration/*.npz
 # OS
 Thumbs.db
 .DS_Store
+
+# Local audit report
+AUDIT.md
