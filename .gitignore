@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/ArUcoChessTracker/
+dist/
+*.spec
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local calibration output (ignore custom user-calibrated camera params, or keep repo template)
+calibration/*.npz
+!calibration/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
