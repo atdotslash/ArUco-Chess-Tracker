@@ -57,16 +57,24 @@ class _TCPCommandHandler(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         api: ChessTrackerAPI = self.server.api  # type: ignore[attr-defined]
         client_address = self.client_address[0]
-        logger.debug("TCP connection from %s", client_address)
+        logger.debug("TCP connection opened from %s", client_address)
 
-        for line in self.rfile:
-            command = line.decode("utf-8").strip()
-            if not command:
-                continue
+        try:
+            for line in self.rfile:
+                command = line.decode("utf-8").strip()
+                if not command:
+                    continue
 
-            response = self._process_command(command, api)
-            self.wfile.write((response + "\n").encode("utf-8"))
-            self.wfile.flush()
+                response = self._process_command(command, api)
+                try:
+                    self.wfile.write((response + "\n").encode("utf-8"))
+                    self.wfile.flush()
+                except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError):
+                    break
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError) as e:
+            logger.debug("TCP connection reset by client %s: %s", client_address, e)
+        finally:
+            logger.debug("TCP connection closed from %s", client_address)
 
     def _process_command(self, command: str, api: ChessTrackerAPI) -> str:
         cmd_upper = command.upper()
