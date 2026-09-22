@@ -10,7 +10,7 @@ import customtkinter as ctk
 
 from src.calibration import CharucoCalibrator
 from src.camera import Camera
-from src.config import RECOMMENDED_CALIBRATION_FRAMES, MAX_ACCEPTABLE_RMS_ERROR
+from src.config import RECOMMENDED_CALIBRATION_FRAMES, MIN_CALIBRATION_FRAMES, MAX_ACCEPTABLE_RMS_ERROR
 from src.utils.image_io import bgr_to_pil
 from src.utils.paths import get_default_calibration_path
 
@@ -23,10 +23,12 @@ class CalibrationDialog(ctk.CTkToplevel):
         parent,
         camera: Camera,
         on_calibrated: Optional[Callable[[np.ndarray, np.ndarray, float], None]] = None,
+        on_closed: Optional[Callable[[], None]] = None,
     ) -> None:
         super().__init__(parent)
         self.camera = camera
         self.on_calibrated = on_calibrated
+        self.on_closed = on_closed
 
         self.calibrator = CharucoCalibrator()
         self.title("Camera Lens Calibration (ChArUco)")
@@ -205,7 +207,7 @@ class CalibrationDialog(ctk.CTkToplevel):
             progress = min(1.0, frames_count / float(RECOMMENDED_CALIBRATION_FRAMES))
             self.progress_bar.set(progress)
 
-            if frames_count >= 5:
+            if frames_count >= MIN_CALIBRATION_FRAMES:
                 self.btn_calibrate.configure(state="normal")
         else:
             self.lbl_detection_status.configure(
@@ -252,4 +254,9 @@ class CalibrationDialog(ctk.CTkToplevel):
 
     def _on_close(self) -> None:
         self._running = False
+        if self.on_closed:
+            try:
+                self.on_closed()
+            except Exception as e:
+                logger.error("Error in calibration on_closed: %s", e)
         self.destroy()

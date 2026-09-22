@@ -88,6 +88,7 @@ CHARUCO_DICT_NAME: Final[str] = "DICT_5X5_50"
 
 # Calibration target threshold
 MAX_ACCEPTABLE_RMS_ERROR: Final[float] = 1.0  # RMS in pixels
+MIN_CALIBRATION_FRAMES: Final[int] = 15
 RECOMMENDED_CALIBRATION_FRAMES: Final[int] = 20
 
 # Default preferences dictionary

@@ -97,6 +97,7 @@ class App:
         self._last_move_squares: Optional[Tuple[str, str]] = None
         self._last_detected_squares: dict[int, str] = {}
         self._running = False
+        self.is_calibrating = False
 
     def _load_calibration(self) -> None:
         """Load stored camera calibration parameters if present."""
@@ -119,11 +120,28 @@ class App:
         # Initial 2D board render
         self.window.board_view.update_board(self.game_state)
 
+        # Prompt if calibration parameters are missing
+        if self.camera_matrix is None and not self.camera.synthetic_mode:
+            self.window.after(600, self._prompt_missing_calibration)
+
         # Schedule vision processing tick
         self.window.after(30, self._vision_tick)
 
         # Enter Tkinter main loop
         self.window.mainloop()
+
+    def _prompt_missing_calibration(self) -> None:
+        """Inform the user if no camera calibration is present and offer to run the calibrator."""
+        import tkinter.messagebox as mb
+        answer = mb.askyesno(
+            "Lens Calibration Recommended",
+            "No camera calibration parameters found (camera_params.npz).\n\n"
+            "Operating without calibration can cause lens distortion to affect ArUco detection and square mapping accuracy.\n\n"
+            "Would you like to calibrate the camera now using a ChArUco board?",
+            parent=self.window,
+        )
+        if answer:
+            self.open_calibration()
 
     def _vision_tick(self) -> None:
         """Periodic vision processing tick on main GUI thread."""
@@ -151,9 +169,9 @@ class App:
             mapping_result = self.board_mapper.map_markers_to_board(markers, H)
             self._last_detected_squares = mapping_result.marker_to_square
 
-            # 4. Check move detection if board mapping succeeded
+            # 4. Check move detection if board mapping succeeded (and not calibrating)
             move_res = None
-            if H is not None and len(mapping_result.square_to_marker) > 0:
+            if not self.is_calibrating and H is not None and len(mapping_result.square_to_marker) > 0:
                 move_res = self.move_detector.process_frame(
                     mapping_result.square_to_marker, self.game_state
                 )
@@ -166,7 +184,11 @@ class App:
 
             # 5. Update Camera Preview with HUD overlays
             is_stable = move_res.is_stable if move_res else True
-            status_text = move_res.status_message if move_res else ("Homography active" if H is not None else "Waiting for 4 corner markers")
+            status_text = (
+                "Calibrating lens..."
+                if self.is_calibrating
+                else (move_res.status_message if move_res else ("Homography active" if H is not None else "Waiting for 4 corner markers"))
+            )
             self.window.camera_view.update_frame(
                 frame=proc_frame,
                 markers=markers,
@@ -184,7 +206,7 @@ class App:
                 is_calibrated=(self.camera_matrix is not None),
                 rms=self.calibration_rms,
                 turn=self.game_state.get_turn(),
-                game_status=self.game_state.get_status_text(),
+                game_status="Calibrating..." if self.is_calibrating else self.game_state.get_status_text(),
                 fen=self.game_state.get_fen(),
             )
 
@@ -200,12 +222,23 @@ class App:
 
     def open_calibration(self) -> None:
         """Open the ChArUco camera lens calibration wizard."""
+        self.is_calibrating = True
+
         def on_calibrated(K: np.ndarray, dist: np.ndarray, rms: float) -> None:
             self.camera_matrix = K
             self.dist_coeffs = dist
             self.calibration_rms = rms
 
-        CalibrationDialog(self.window, self.camera, on_calibrated=on_calibrated)
+        def on_closed() -> None:
+            self.is_calibrating = False
+            self.move_detector.reset_baseline({})
+
+        CalibrationDialog(
+            self.window,
+            self.camera,
+            on_calibrated=on_calibrated,
+            on_closed=on_closed,
+        )
 
     def open_marker_config(self) -> None:
         """Open the ArUco marker piece assignment dialog."""
