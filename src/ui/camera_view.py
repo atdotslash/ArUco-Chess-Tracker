@@ -41,8 +41,25 @@ class CameraView(ctk.CTkFrame):
         status_text: str = "",
         fps: float = 0.0,
     ) -> None:
-        """Render frame with overlays scaled to the current widget size."""
         if frame is None:
+            self.canvas.delete("all")
+            self._image_on_canvas = None
+            cw = max(200, self._view_width)
+            ch = max(150, self._view_height)
+            self.canvas.create_text(
+                cw // 2,
+                ch // 2 - 12,
+                text="Camera Disconnected",
+                font=("Segoe UI", 16, "bold"),
+                fill="#fa5252",
+            )
+            self.canvas.create_text(
+                cw // 2,
+                ch // 2 + 16,
+                text="Connect a webcam or enable synthetic simulation in Preferences",
+                font=("Segoe UI", 11),
+                fill="#868e96",
+            )
             return
 
         display_frame = frame.copy()

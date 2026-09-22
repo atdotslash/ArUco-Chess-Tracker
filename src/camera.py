@@ -124,6 +124,8 @@ class Camera:
         self._synthetic_gen = SyntheticBoardGenerator(width, height)
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._connected = False
+        self._consecutive_failures = 0
         self._lock = threading.Lock()
         self._latest_frame: Optional[np.ndarray] = None
         self._has_new_frame = False
@@ -150,6 +152,8 @@ class Camera:
                     self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.target_width)
                     self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.target_height)
                     self._cap.set(cv2.CAP_PROP_FPS, self.target_fps)
+                    self._connected = True
+                    self._consecutive_failures = 0
                 else:
                     logger.warning("Failed to open camera %s. Falling back to synthetic mode.", self.source)
                     self.synthetic_mode = True
@@ -179,15 +183,33 @@ class Camera:
                 frame = self._synthetic_gen.render_frame()
                 ret = True
             else:
-                ret, frame = self._cap.read()
+                try:
+                    ret, frame = self._cap.read()
+                except Exception as e:
+                    logger.warning("Camera read error: %s", e)
+                    ret, frame = False, None
+
                 if not ret:
                     # If reading a video file, loop to beginning
                     if isinstance(self.source, (str, Path)):
-                        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        ret, frame = self._cap.read()
-                    if not ret:
-                        time.sleep(0.05)
-                        continue
+                        try:
+                            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            ret, frame = self._cap.read()
+                        except Exception:
+                            ret, frame = False, None
+
+                if not ret or frame is None:
+                    self._consecutive_failures += 1
+                    if self._consecutive_failures >= 10:
+                        self._connected = False
+                        with self._lock:
+                            self._latest_frame = None
+                            self._has_new_frame = False
+                    time.sleep(0.05)
+                    continue
+                else:
+                    self._consecutive_failures = 0
+                    self._connected = True
 
             if ret and frame is not None:
                 with self._lock:
@@ -216,9 +238,11 @@ class Camera:
 
     def is_opened(self) -> bool:
         """Check if camera is active."""
+        if not self._running:
+            return False
         if self.synthetic_mode:
-            return self._running
-        return self._cap is not None and self._cap.isOpened() and self._running
+            return True
+        return self._cap is not None and self._cap.isOpened() and self._connected
 
     def get_fps(self) -> float:
         """Return current measured FPS."""
