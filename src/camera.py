@@ -40,10 +40,11 @@ class SyntheticBoardGenerator:
         frame = np.full((self.height, self.width, 3), 40, dtype=np.uint8)
 
         # Chessboard dimensions in pixels
-        board_size = 560
-        sq_size = board_size // 8
-        board_canvas = np.full((board_size + 160, board_size + 160, 3), 30, dtype=np.uint8)
-        offset = 80
+        board_size = 640
+        sq_size = 80
+        offset = 120
+        total_size = board_size + 2 * offset
+        board_canvas = np.full((total_size, total_size, 3), 40, dtype=np.uint8)
 
         # Draw 8x8 squares
         light_color = (210, 236, 235)  # BGR
@@ -55,22 +56,19 @@ class SyntheticBoardGenerator:
                 color = light_color if (r + c) % 2 == 0 else dark_color
                 cv2.rectangle(board_canvas, (x0, y0), (x0 + sq_size, y0 + sq_size), color, -1)
 
-        # Draw Corner ArUcos at outer margins
-        # a8 corner: top-left (offset, offset)
-        # h8 corner: top-right (offset + board_size, offset)
-        # a1 corner: bottom-left (offset, offset + board_size)
-        # h1 corner: bottom-right (offset + board_size, offset + board_size)
-        corner_specs = [
-            (CORNER_ID_A8, offset - 40, offset - 40),
-            (CORNER_ID_H8, offset + board_size - 10, offset - 40),
-            (CORNER_ID_A1, offset - 40, offset + board_size - 10),
-            (CORNER_ID_H1, offset + board_size - 10, offset + board_size - 10),
+        # Draw Corner ArUcos at outer vertices of the board (margin_squares = 0.0)
+        # 102: a8, 103: h8, 100: a1, 101: h1
+        corner_coords = [
+            (CORNER_ID_A8, offset, offset),
+            (CORNER_ID_H8, offset + board_size, offset),
+            (CORNER_ID_A1, offset, offset + board_size),
+            (CORNER_ID_H1, offset + board_size, offset + board_size),
         ]
-        aruco_dict = get_aruco_dict("DICT_4X4_250")
-        for cid, cx, cy in corner_specs:
-            m_img = cv2.aruco.generateImageMarker(aruco_dict, cid, 50)
-            m_bgr = cv2.cvtColor(m_img, cv2.COLOR_GRAY2BGR)
-            board_canvas[cy : cy + 50, cx : cx + 50] = m_bgr
+        for cid, cx, cy in corner_coords:
+            m = np.array(generate_marker(cid, marker_size_px=28, border_px=6))
+            m_bgr = cv2.cvtColor(m, cv2.COLOR_RGB2BGR)
+            h_m, w_m = m_bgr.shape[:2]
+            board_canvas[cy - h_m // 2 : cy - h_m // 2 + h_m, cx - w_m // 2 : cx - w_m // 2 + w_m] = m_bgr
 
         # Draw piece ArUcos inside their assigned squares
         for marker_id, sq in self.piece_positions.items():
@@ -79,23 +77,23 @@ class SyntheticBoardGenerator:
             col_idx = ord(sq[0].lower()) - ord("a")
             row_idx = 8 - int(sq[1])
             if 0 <= col_idx < 8 and 0 <= row_idx < 8:
-                px = offset + col_idx * sq_size + (sq_size - 40) // 2
-                py = offset + row_idx * sq_size + (sq_size - 40) // 2
-                m_img = cv2.aruco.generateImageMarker(aruco_dict, marker_id, 40)
-                m_bgr = cv2.cvtColor(m_img, cv2.COLOR_GRAY2BGR)
-                board_canvas[py : py + 40, px : px + 40] = m_bgr
+                cx = offset + col_idx * sq_size + sq_size // 2
+                cy = offset + row_idx * sq_size + sq_size // 2
+                m = np.array(generate_marker(marker_id, marker_size_px=28, border_px=4))
+                m_bgr = cv2.cvtColor(m, cv2.COLOR_RGB2BGR)
+                h_m, w_m = m_bgr.shape[:2]
+                board_canvas[cy - h_m // 2 : cy - h_m // 2 + h_m, cx - w_m // 2 : cx - w_m // 2 + w_m] = m_bgr
 
         # Place onto full frame with mild perspective
-        canvas_h, canvas_w = board_canvas.shape[:2]
-        src_pts = np.float32([[0, 0], [canvas_w, 0], [canvas_w, canvas_h], [0, canvas_h]])
+        src_pts = np.float32([[0, 0], [total_size, 0], [total_size, total_size], [0, total_size]])
         dst_pts = np.float32([
-            [self.width * 0.22, self.height * 0.08],
-            [self.width * 0.78, self.height * 0.08],
-            [self.width * 0.88, self.height * 0.92],
-            [self.width * 0.12, self.height * 0.92],
+            [self.width * 0.22, self.height * 0.05],
+            [self.width * 0.78, self.height * 0.05],
+            [self.width * 0.82, self.height * 0.95],
+            [self.width * 0.18, self.height * 0.95],
         ])
         H = cv2.getPerspectiveTransform(src_pts, dst_pts)
-        warped = cv2.warpPerspective(board_canvas, H, (self.width, self.height))
+        warped = cv2.warpPerspective(board_canvas, H, (self.width, self.height), flags=cv2.INTER_LANCZOS4)
 
         # Combine with frame background
         mask = (warped > 0).any(axis=2)
