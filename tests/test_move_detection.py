@@ -131,3 +131,27 @@ def test_illegal_move_rejection(starting_square_layout):
     assert r.is_legal is False
     assert r.move is None
     assert "Illegal move" in r.status_message
+
+
+def test_standalone_detect_move():
+    """Verify module-level detect_move helper."""
+    import numpy as np
+    from src.aruco_detector import DetectedMarker
+    from src.move_detector import detect_move
+
+    # H is identity matrix
+    H = np.eye(3, dtype=np.float32)
+    # Piece 4 (White pawn) at e2 (pixel 4.5, 6.5)
+    # In board coordinates: square_to_board_center('e2') is (4.5, 6.5)
+    prev_markers = [
+        DetectedMarker(id=4, corners=np.zeros((4, 2), dtype=np.float32), center=(4.5, 6.5)),
+    ]
+    # In next frame, Piece 4 moves to e4 (4.5, 4.5)
+    curr_markers = [
+        DetectedMarker(id=4, corners=np.zeros((4, 2), dtype=np.float32), center=(4.5, 4.5)),
+    ]
+
+    gs = GameState()
+    move = detect_move(prev_markers, curr_markers, H=H, game_state=gs)
+    assert move is not None
+    assert move.uci() == "e2e4"

@@ -26,7 +26,7 @@ class DetectedMarker:
     id: int
     corners: np.ndarray  # Shape (4, 2) in pixels (float32)
     center: Tuple[float, float]  # (cx, cy) in pixels
-    area: float
+    area: float = 0.0
     rvec: Optional[np.ndarray] = None  # (3, 1) rotation vector
     tvec: Optional[np.ndarray] = None  # (3, 1) translation vector
 
@@ -226,3 +226,18 @@ class ArucoDetectorWrapper:
                 cv2.drawFrameAxes(output, camera_matrix, dist_coeffs, marker.rvec, marker.tvec, axis_len)
 
         return output
+
+
+_default_detector: Optional[ArucoDetectorWrapper] = None
+
+
+def detect_markers(
+    frame: np.ndarray,
+    camera_matrix: Optional[np.ndarray] = None,
+    dist_coeffs: Optional[np.ndarray] = None,
+) -> List[DetectedMarker]:
+    """Detect piece and corner markers on frame (module-level function as specified in spec)."""
+    global _default_detector
+    if _default_detector is None:
+        _default_detector = ArucoDetectorWrapper()
+    return _default_detector.detect_markers(frame, camera_matrix, dist_coeffs)

@@ -4,7 +4,9 @@ from dataclasses import dataclass
 import logging
 from typing import Dict, List, Optional, Set, Tuple
 import chess
+import numpy as np
 
+from src.aruco_detector import DetectedMarker
 from src.game_state import GameState
 
 logger = logging.getLogger(__name__)
@@ -221,3 +223,38 @@ class MoveDetector:
             if candidate and game_state.board.is_en_passant(candidate):
                 return candidate
         return None
+
+
+def detect_move(
+    prev_markers: List["DetectedMarker"],
+    curr_markers: List["DetectedMarker"],
+    H: Optional[np.ndarray] = None,
+    game_state: Optional[GameState] = None,
+) -> Optional[chess.Move]:
+    """Compare two frames of detected markers and return the legal chess move detected, or None.
+
+    Specified in section 8.2 of the project specification.
+    """
+    from src.board_mapper import BoardMapper
+    from src.homography import compute_board_homography
+
+    if H is None:
+        corner_pixels = {m.id: m.center for m in curr_markers if m.id in (100, 101, 102, 103)}
+        if len(corner_pixels) < 4:
+            corner_pixels = {m.id: m.center for m in prev_markers if m.id in (100, 101, 102, 103)}
+        H = compute_board_homography(corner_pixels)
+
+    if H is None:
+        return None
+
+    mapper = BoardMapper()
+    prev_map = mapper.map_markers_to_board(prev_markers, H)
+    curr_map = mapper.map_markers_to_board(curr_markers, H)
+
+    if game_state is None:
+        game_state = GameState()
+
+    detector = MoveDetector(stable_frames_threshold=1)
+    detector.reset_baseline(prev_map.square_to_marker)
+    res = detector.process_frame(curr_map.square_to_marker, game_state)
+    return res.move if (res and res.is_legal) else None

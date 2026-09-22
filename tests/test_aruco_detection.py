@@ -106,3 +106,17 @@ def test_temporal_smoothing_and_loss():
         detector.detect_markers(empty_frame)
 
     assert 1 not in detector._smoothed_corners
+
+
+def test_module_level_detect_markers_and_generate_marker_args():
+    """Verify module-level detect_markers function and generate_marker parameter compatibility."""
+    from src.aruco_detector import detect_markers
+    import cv2
+
+    img = generate_marker(10, size_px=100, border_px=15, dictionary=cv2.aruco.DICT_4X4_250)
+    canvas = np.full((300, 300, 3), 255, dtype=np.uint8)
+    canvas[50:180, 50:180] = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    markers = detect_markers(canvas)
+    assert len(markers) == 1
+    assert markers[0].id == 10

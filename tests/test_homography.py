@@ -37,6 +37,20 @@ def test_board_to_square_conversions():
     assert board_to_square((4.0, 8.0)) is None
 
 
+def test_identity_homography_mandatory_points():
+    """Mandatory audit test: verify identity homography maps (0,0)->a8, (7.5,7.5)->h1, (0.5,0.5)->a8."""
+    H = np.eye(3, dtype=np.float32)
+
+    bx0, by0 = pixel_to_board((0.0, 0.0), H)
+    assert board_to_square((bx0, by0)) == "a8"
+
+    bx1, by1 = pixel_to_board((0.5, 0.5), H)
+    assert board_to_square((bx1, by1)) == "a8"
+
+    bx2, by2 = pixel_to_board((7.5, 7.5), H)
+    assert board_to_square((bx2, by2)) == "h1"
+
+
 def test_square_to_board_center():
     """Verify reverse mapping from algebraic square string to center (x, y)."""
     assert square_to_board_center("a8") == (0.5, 0.5)

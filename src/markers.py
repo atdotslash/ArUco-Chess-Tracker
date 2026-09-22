@@ -2,7 +2,7 @@
 
 import argparse
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 import cv2
 import numpy as np
 from PIL import Image
@@ -21,9 +21,11 @@ from src.config import (
 from src.utils.paths import get_markers_dir
 
 
-def get_aruco_dict(dict_name: str = "DICT_4X4_250") -> cv2.aruco.Dictionary:
-    """Return cv2.aruco predefined dictionary object from string name."""
-    attr_name = getattr(cv2.aruco, dict_name, None)
+def get_aruco_dict(dict_name: Union[str, int] = "DICT_4X4_250") -> cv2.aruco.Dictionary:
+    """Return cv2.aruco predefined dictionary object from string name or integer constant."""
+    if isinstance(dict_name, int):
+        return cv2.aruco.getPredefinedDictionary(dict_name)
+    attr_name = getattr(cv2.aruco, str(dict_name), None)
     if attr_name is None:
         attr_name = cv2.aruco.DICT_4X4_250
     return cv2.aruco.getPredefinedDictionary(attr_name)
@@ -31,28 +33,33 @@ def get_aruco_dict(dict_name: str = "DICT_4X4_250") -> cv2.aruco.Dictionary:
 
 def generate_marker(
     marker_id: int,
-    marker_size_px: int = 300,
+    size_px: int = 300,
     border_px: int = 60,
-    dict_name: str = "DICT_4X4_250",
+    dictionary: Union[int, str] = "DICT_4X4_250",
+    marker_size_px: Optional[int] = None,
+    dict_name: Optional[Union[str, int]] = None,
 ) -> Image.Image:
     """Generate a single ArUco marker image with a white outer border.
 
     Args:
         marker_id: ArUco identifier (0-249).
-        marker_size_px: Pixel dimension of the black marker square.
+        size_px: Pixel dimension of the black marker square (alias: marker_size_px).
         border_px: Width of the outer white margin.
-        dict_name: ArUco dictionary name.
+        dictionary: ArUco dictionary (name string or OpenCV integer constant).
 
     Returns:
         PIL Image in RGB mode.
     """
-    aruco_dict = get_aruco_dict(dict_name)
-    marker_img = cv2.aruco.generateImageMarker(aruco_dict, marker_id, marker_size_px)
+    actual_size = marker_size_px if marker_size_px is not None else size_px
+    actual_dict = dict_name if dict_name is not None else dictionary
+
+    aruco_dict = get_aruco_dict(actual_dict)
+    marker_img = cv2.aruco.generateImageMarker(aruco_dict, marker_id, actual_size)
 
     # Add white border around the marker
-    total_size = marker_size_px + 2 * border_px
+    total_size = actual_size + 2 * border_px
     bordered = np.full((total_size, total_size), 255, dtype=np.uint8)
-    bordered[border_px : border_px + marker_size_px, border_px : border_px + marker_size_px] = marker_img
+    bordered[border_px : border_px + actual_size, border_px : border_px + actual_size] = marker_img
 
     # Convert to PIL RGB
     return Image.fromarray(bordered).convert("RGB")
